@@ -1,0 +1,89 @@
+Bug reports
+
+Design issues
+
+1	Hash server should not use http
+	Severity: Critical 
+	
+	Steps to reproduce: N/A
+	
+	Description: Any service that transmits or receives sensitive information like passwords and their hashes should use https for secure communication. 
+	
+2	Use of sequential jobIds is insecure
+	Severity: Major
+	
+	Steps to reproduce: submit a series of password hash requests and observer that the jobIds returned by the hash server are integers in ascending order
+	
+	Description: The jobIds returned by the hash server are simply a count of requests. This would allow anyone with access to the endpoint to easily retrieve all the hashes requested by other users (and to know how many had been requested). An easy although not entirely perfect fix would be to use random 32 or 64 bit integers as jobIds.
+	
+3	Use of environment variable to set port is dubious
+	Severity: Trivial
+	
+	Steps to reproduce: N/A
+	
+	Description: Environment variables are generally used to store attributes that might be accessed by more than one process. Allowing the port value to be set via a flag on the commandline, or by use of a config file, would be more appropriate. Also the use of $PORT rather than something more specific like $HASHSERVER_PORT risks a possible namespace collision.
+	
+	
+Requirement and UAT failures
+
+4	JobId not returned immediately
+	Severity: Medium
+	
+	Steps to reproduce: Submit a POST request to the /hash endpoint and observe the response time
+	Expected behavior: Per requirement, the jobId should be returned immediately
+	Actual behavior: The hashserver waits five seconds before returning a jobID
+	
+	Description: The hash server waits five seconds before returning a jobId when a request for a hash is submitted. This five second delay should occur after the jobId is returned, before the hash is calculated. See also ticket #5.
+	
+5	Hash calculated and available immediately after jobId is returned
+	Severity: Medium
+	
+	Steps to reproduce: Submit a post request to the /hash endpoint and wait for the jobId, then immediately submit a GET request for the hash.
+	Expected behavior: Not specified in detail in the requirements. However, as the hash should not be calculated yet, the server should either wait five seconds to respond until the hash is available, or else immediately return some other result informing the client that the hash is not yet available.
+	Actual behavior: Hash is calculated and returned immediately.
+	
+	Description: The hash server should wait five seconds after returning a jobId before calculating the password hash, but does not do so. Instead the five second delay occurs before the jobId is returned. See also ticket #4.
+	
+6	Average time returned by hashserver stats is not accurate
+	Severity: Medium
+	
+	Steps to reproduce: Submit ten pairs of password hash requests (POST and GET) and request stats after each one.
+	Expected behavior: Although the requirement is ambiguous as it does not describe exactly which interval is being measured, we would expect that the total time (average multiplied by total requests) would increase after each hash request. Further, so long as requests are similar in timing the average should settle towards some value.
+	Actual behavior: Somewhat inscrutable. In general, the total time appears to be incremented only occasionally, so that initial calls to /stats may return a zero value for average time. Further, even once a non-zero value is reported, calculation on subsequent reported average time shows that the total time is not being incremented.
+	
+	Description: Average time reported by stats seems to falsely indicate that many requests take zero time, so that the reported average is inaccurate. A code review would probably be more efficient than further testing in determining exactly what is going on.
+	The reported time may also be in microseconds rather than the required milliseconds, but without visbility in to the interval that the code is measuring it is difficult to be sure of this.
+	
+7	Capacity limits of hash server
+	Severity: unknown
+	
+	Steps to reproduce: Run four instances of test_hs_loadrunner.py with GETONLY set to False. These will operate normally and the hash server will handle connections from all four of them without error or measurable delay. At this level of loading, the average number of requests is only 1-2 per second.
+	Then start a fifth instance of test_hs_loadrunner with GETONLY set to True. In this mode, the script does nothing but get hashes for previously posted passwords, thus avoiding the five second delay that jobid retrieval involves. 
+	Expected behavior: Precise requirements for handling load are unclear, thus the severity is unknown. 
+	Actual behavior: Server can't handle hundreds of get requests per second.
+	
+	Description: This rapid flood of connection requests will overwhelm the capacity of the server and result in an error:
+	HTTPConnectionPool(host='127.0.0.1', port=55555): Max retries exceeded with url: /hash (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002126E12DF70>: Failed to establish a new connection: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted'))
+	
+8	Hash server does not allow existing password post requests to complete on SIGTERM shutdown
+	Severity: Minor
+	
+	Steps to reproduce: Run four instances of test_hs_loadrunner to guarantee that multiple connections will be active at any given time. Then run test_hs_sigterm to generate a SIGTERM signal to the server process.
+	
+	Expected behavior: Existing requests should be fulfilled
+	Actual behavior: All active connections are rudely aborted.
+	
+	Description: The server shuts down immediately on receiving the SIGTERM and drops all active connections without completing the in-flight requests for jobids. It is unclear whether actual get requests for hashes are similarly aborted; because these are completed in 2 milliseconds on average, it is difficult to test. 
+	Error seen on the client side is 
+	ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+	Because the server has an alternate mechanism (via http) for graceful shutdown, this is minor.
+	
+9	Hash server continues to accept new requests after http shutdown request
+	Severity: Major
+	
+	Steps to reproduce: Load the server by running four instances of test_hs_loadrunner. Then send a shutdown request by posting 'shutdown' to the hash endpoint (by script or commandline)
+	Expected behavior: In flight requests are completed, new requests or connections are rejected, and the server shuts down after completing existing requests.
+	Actual behavior: Hash server continues to accept and complete new requests and (if operating under continuous load) never shuts down.
+	
+	Description: Requirements state that the server should not accept new requests after shutdown is posted to the hash endpoint. But it will continue to do so, and may never shut down if busy enough.
+	It does return a 200 response as required. If requests slow down enough so that at some point it has no active requests, it will then shut down.
