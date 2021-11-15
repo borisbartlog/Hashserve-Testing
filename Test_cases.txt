@@ -1,0 +1,55 @@
+Test Cases
+
+Specific to listed requirements:
+
+1) Hash retrieval sanity check
+	After starting the hash server, post a password hash request, then use the jobid to get the hash. Verify that the hash is the correct SHA-512 hash for the submitted password.
+	Automation: Run test_basic.py
+
+2) Check timing requirements
+	Post a password hash request and verify that the jobid is returned immediately. Then immediately submit a request for the hash using the obtained jobid and verify that it is not yet available. After five seconds have elapsed, submit the get request again and verify that the hash is now available.
+	Automation: Run test_timing.py
+
+3) Verify stats reports accurate request count
+	Post six password hash requests and get stats after each one. Verify that the request count increases by one each time.
+	Then repeat the above process while also submitting a get request for each of the hashes before requesting stats. Verify that these gets do not increase the request count.
+	Automation: Run test_hs_loadrunner.py and observe the intermittent stat reports printed by the script to confirm that the request count is consistent with the other reported requests.
+
+4) Verify stats reports accurate average time
+	As the requirement is imprecise no exact verification is possible. However, it is possible to calculate the total time implied by the reported stats and at least confirm that this increases with each request.
+	Six times in a row, post a password hash request, get the hash, and get stats. Verify tha the total time (requests times average request time) increases each time.
+	Automation: Run test_hs_loadrunner.py and evaluate the reported stats for stepwise increase in total time as above.
+
+5) Verify earlier jobs/hashes can be retrieved
+	Post requests for three passwords, retrieving the hash for each one in turn. Then retrieve the hash for the first jobid again and verify that it matches the one originally retrieved.
+	Automation: Run test_hs_loadrunner.py
+
+6) Verify multiple requests can be handled at the same time
+	Manual testing infeasible.
+	Automation: Run four instances of test_hs_loadrunner.py and verify that several hundred requests are handled without error.
+
+7) Submit http shutdown request while requests are in flight
+	Run four instances of test_hs_loadrunner and then run test_hs_http_shutdown. Verify that outstanding requests are completed before the server shuts down.
+
+8) Submit new requests after http shutdown request
+	Steps as for 7) but verify that no further requests are accepted by the server
+	
+Additional test cases:
+
+9) Submit 4000 requests and check memory usage
+	Run four instances of test_hs_loadrunner.py and check the memory usage (via ps) roughly when the jobid reaches 1000, 2000, 3000, and 4000. 
+	
+10) Submit password hash request for Japanese characters
+	Copy and paste a set of Japanese characters in to the shell to do this via the commandline. Alternatively, edit test_basic.py to submit this password (so that hash can easily be verified)
+	
+11) Submit password hash request for Chinese characters
+	Steps as for 10) but using Chinese
+
+12) Test password hashing for password length up to 1024 characters
+	Edit test_basic.py incrementally and run it each time, doubling the length of the password with each run (copy and paste), until it reaches a length of 1024 characters.
+
+13) Check behavior on graceful system shutdown request (SIGTERM)
+	Steps as for 7) and 8), except that instead of running test_hs_http_shutdown.py , run test_hs_sigterm.py.
+
+14) Determine load limit of hash server
+	Run four instances of the loadrunner. If the server handles this gracefully, edit the loadrunner script to set GETONLY to True. Start instances of the edited script until some problem or error is seen.

@@ -1,0 +1,16 @@
+Following is a numbered list of requirements derived from the description of the hash server's operation.
+These are referenced on the test case spread sheet to describe which requirements are being tested by each case.
+
+1) Hashserver will wait for http connections on launch
+2) Hashserver will wait on the port specified by the environment variable $PORT
+3) A POST to the /hash endpoint will accept a password
+4) A POST to the /hash endpoint will immediately return a jobID
+5) The hash server will wait five seconds after returning the jobID before computing the hash
+6) Submitting a GET request with a jobID for which the hash has been calculated should return the hash
+7) Hashes should be generated using the SHA-512 algorithm
+8) Hashes should be encoded in base64
+9) Submitting a GET request to /stats should return a JSON data structure showing total hash requests and the average time of a hash request (what does this mean?).
+10) The average hash request time should be in milliseconds.
+11) The server should be able to handle multiple connections simultaneously (how many??)
+12) After receiving a graceful shutdown request, the server should complete outstanding requests
+13) After receiving a graceful shutdown request, the server should decline any new requests
